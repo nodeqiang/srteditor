@@ -1,6 +1,6 @@
 'use strict'
 
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, Menu } from 'electron'
 
 /**
  * Set `__static` path to static files in production
@@ -16,6 +16,30 @@ const winURL = process.env.NODE_ENV === 'development'
   : `file://${__dirname}/index.html`
 
 function createWindow () {
+  if (process.env.NODE_ENV !== 'development') {
+    if (process.platform === 'darwin') {
+      const template = [
+        {
+          label: 'Application',
+          submenu: [
+            { label: 'Quit', accelerator: 'Command+Q', click: function () { app.quit() } }
+          ]
+        },
+        {
+          label: 'Edit',
+          submenu: [
+            { label: 'Copy', accelerator: 'CmdOrCtrl+C', selector: 'copy:' },
+            { label: 'Paste', accelerator: 'CmdOrCtrl+V', selector: 'paste:' },
+            { label: 'Select All', accelerator: 'CmdOrCtrl+A', selector: 'selectAll:' }
+          ]
+        }
+      ]
+      Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+    } else {
+      Menu.setApplicationMenu(null)
+    }
+  }
+
   /**
    * Initial window options
    */
