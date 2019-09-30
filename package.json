@@ -22,7 +22,7 @@
     "postinstall": "npm run lint:fix"
   },
   "build": {
-    "productName": "srceditor",
+    "productName": "srteditor",
     "appId": "com.example.yourapp",
     "directories": {
       "output": "build"

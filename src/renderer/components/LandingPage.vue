@@ -5,6 +5,14 @@
       <b-link @click="choosemp3">{{ mp3file || '未指定mp3文件' }}</b-link>
       <audio id="player" v-if="mp3file" :src="`file://${mp3file}`" />
     </div>
+    <div v-if="mp3file" class="controlbar">
+      <b-button-toolbar key-nav aria-label="Toolbar with button groups">
+        <b-button-group class="mx-1">
+          <b-button @click="speednormal=true" :pressed="speednormal">正常速度</b-button>
+          <b-button @click="speednormal=false" :pressed="!speednormal">慢速播放</b-button>
+        </b-button-group>
+      </b-button-toolbar>
+    </div>
     <div class="srtline" v-for="(line, idx) of lines" :key="line.sequence">
       <b-link class="sequence">{{line.sequence}}</b-link>
       <b-link @click="play(line)" class="time">{{line.time}}</b-link>
@@ -19,6 +27,7 @@ module.exports = {
   data: () => ({
     mp3file: '',
     srtfile: '',
+    speednormal: true,
     lines: []
   }),
   methods: {
@@ -31,7 +40,7 @@ module.exports = {
       this.mp3file = path && path[0]
     },
     dosave (idx) {
-      require('fs').writeFileSync(`${this.srtfile}_new.srt`, this.newvalue.map(l => {
+      require('fs').writeFileSync(this.srtfile, this.newvalue.map(l => {
         return `${l.sequence}\n${l.time}\n${l.cnt}`
       }).join('\n\n'))
     },
@@ -59,6 +68,16 @@ module.exports = {
         return { sequence: params[0], time: params[1], cnt: params[2] }
       })
       this.newvalue = this.lines.map(a => ({ sequence: a.sequence, time: a.time, cnt: a.cnt }))
+    },
+    speednormal () {
+      const player = document.getElementById('player')
+      if (this.speednormal) {
+        player.defaultPlaybackRate = 1
+        player.playbackRate = 1
+      } else {
+        player.defaultPlaybackRate = 0.5
+        player.playbackRate = 0.5
+      }
     }
   }
 }
@@ -82,5 +101,10 @@ module.exports = {
   display: flex;
   align-items: center;
   margin-top: 10px;
+}
+.controlbar{
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
 }
 </style>
