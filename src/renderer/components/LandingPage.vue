@@ -5,9 +5,11 @@
       <b-link @click="choosemp3">{{ mp3file || '未指定mp3文件' }}</b-link>
       <audio id="player" v-if="mp3file" :src="`file://${mp3file}`" />
     </div>
-    <div v-if="mp3file" class="controlbar">
+    <div class="controlbar">
       <b-button-toolbar key-nav aria-label="Toolbar with button groups">
-        <b-button-group class="mx-1">
+        <b-button v-if="!srtfile" @click="chooseraw">从文本文件创建</b-button>
+        <b-button v-if="rawfile" @click="makepoint">打点</b-button>
+        <b-button-group v-if="mp3file" class="mx-1">
           <b-button @click="speednormal=true" :pressed="speednormal">正常速度</b-button>
           <b-button @click="speednormal=false" :pressed="!speednormal">慢速播放</b-button>
         </b-button-group>
@@ -27,6 +29,7 @@ module.exports = {
   data: () => ({
     mp3file: '',
     srtfile: '',
+    rawfile: '',
     speednormal: true,
     lines: []
   }),
@@ -35,14 +38,50 @@ module.exports = {
       const path = dialog.showOpenDialog({properties: ['openFile'], filters: [{name: '字幕文件', extensions: ['srt']}]})
       this.srtfile = path && path[0]
     },
+    chooseraw () {
+      const path = dialog.showOpenDialog({properties: ['openFile'], filters: [{name: '文本文件', extensions: ['txt']}]})
+      this.rawfile = path && path[0]
+    },
     choosemp3 () {
       const path = dialog.showOpenDialog({properties: ['openFile'], filters: [{name: '配音文件', extensions: ['mp3']}]})
       this.mp3file = path && path[0]
     },
     dosave (idx) {
-      require('fs').writeFileSync(this.srtfile, this.newvalue.map(l => {
-        return `${l.sequence}\n${l.time}\n${l.cnt}`
-      }).join('\n\n'))
+      if (this.srtfile) {
+        require('fs').writeFileSync(this.srtfile, this.newvalue.map(l => {
+          return `${l.sequence}\n${l.time}\n${l.cnt}`
+        }).join('\n\n'))
+      } else if (this.rawfile) {
+        require('fs').writeFileSync(this.rawfile + '.srt', this.lines.map(l => {
+          return `${l.sequence}\n${l.time}\n${l.cnt}`
+        }).join('\n\n'))
+      }
+    },
+    makepoint () {
+      const player = document.getElementById('player')
+      if (player.paused) {
+        player.play()
+        this.rawidx = 0
+      } else {
+        if (this.rawidx >= this.lines.length) {
+          player.pause()
+          return
+        }
+        let secs = player.currentTime
+        const msec = Math.round(secs * 1000) % 1000
+        const hour = Math.floor(secs / 3600)
+        const min = Math.floor(secs / 60) % 60
+        secs = Math.floor(secs) % 60
+        const timestr = (hour > 9 ? hour : ('0' + hour)) + ':' + (min > 9 ? min : ('0' + min)) + ':' + (secs > 9 ? secs : ('0' + secs)) + ',' + msec
+
+        if (this.lines[this.rawidx].time) {
+          this.lines[this.rawidx].time += '-->' + timestr
+          this.rawidx += 1
+        } else {
+          this.lines[this.rawidx].time = timestr
+        }
+        this.dosave()
+      }
     },
     play (line) {
       const player = document.getElementById('player')
@@ -61,13 +100,24 @@ module.exports = {
     }
   },
   watch: {
+    rawfile () {
+      if (this.rawfile) {
+        const content = require('fs').readFileSync(this.rawfile, 'utf-8')
+        this.lines = content.split('\n').map((param, idx) => {
+          return { sequence: idx + 1, time: '', cnt: param }
+        })
+        this.newvalue = this.lines.map(a => ({ sequence: a.sequence, time: a.time, cnt: a.cnt }))
+      }
+    },
     srtfile () {
-      const content = require('fs').readFileSync(this.srtfile, 'utf-8')
-      this.lines = content.split('\n\n').map(param => {
-        const params = param.split('\n')
-        return { sequence: params[0], time: params[1], cnt: params[2] }
-      })
-      this.newvalue = this.lines.map(a => ({ sequence: a.sequence, time: a.time, cnt: a.cnt }))
+      if (this.srtfile) {
+        const content = require('fs').readFileSync(this.srtfile, 'utf-8')
+        this.lines = content.split('\n\n').map(param => {
+          const params = param.split('\n')
+          return { sequence: params[0], time: params[1], cnt: params[2] }
+        })
+        this.newvalue = this.lines.map(a => ({ sequence: a.sequence, time: a.time, cnt: a.cnt }))
+      }
     },
     speednormal () {
       const player = document.getElementById('player')
