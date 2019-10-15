@@ -1,6 +1,51 @@
 'use strict'
 
 import { app, BrowserWindow, Menu } from 'electron'
+const { ipcMain } = require('electron')
+const fs = require('fs')
+
+const gphoto2 = require('gphoto2')
+const GPhoto = new gphoto2.GPhoto2()
+GPhoto.setLogLevel(1)
+GPhoto.on('log', function (level, domain, message) {
+  console.log(domain, message)
+})
+
+let camera, lastfile
+ipcMain.on('previewpath', (event, arg) => {
+  console.log('receive preview request ...')
+  if (lastfile) {
+    setTimeout(() => {
+      fs.unlink(lastfile)
+    }, 1000)
+  }
+  if (!camera) {
+    GPhoto.list(function (list) {
+      if (list.length === 0) {
+        console.log('no camera found!')
+        return
+      }
+      camera = list[0]
+      console.log('Found', camera.model)
+      camera.takePicture({
+        preview: true,
+        targetPath: '/tmp/foo.XXXXXX'
+      }, function (er, tmpname) {
+        lastfile = tmpname
+        event.returnValue = tmpname
+        console.log(tmpname)
+      })
+    })
+  } else {
+    camera.takePicture({
+      preview: true,
+      targetPath: '/tmp/foo.XXXXXX'
+    }, function (er, tmpname) {
+      event.returnValue = tmpname
+      console.log(tmpname)
+    })
+  }
+})
 
 /**
  * Set `__static` path to static files in production
@@ -44,9 +89,9 @@ function createWindow () {
    * Initial window options
    */
   mainWindow = new BrowserWindow({
-    height: 563,
+    height: 2000,
     useContentSize: true,
-    width: 1000,
+    width: 2000,
     webPreferences: {
       webSecurity: false
     }
