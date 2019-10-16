@@ -2,48 +2,44 @@
 
 import { app, BrowserWindow, Menu } from 'electron'
 const { ipcMain } = require('electron')
-const fs = require('fs')
 
-const gphoto2 = require('gphoto2')
-const GPhoto = new gphoto2.GPhoto2()
-GPhoto.setLogLevel(1)
-GPhoto.on('log', function (level, domain, message) {
-  console.log(domain, message)
+const GPhoto2 = require('./gphoto2').default
+
+let GP2 = new GPhoto2()
+let camera
+
+ipcMain.on('stoprecord', async (event, arg) => {
+  if (camera) {
+    await GP2.setConfig(camera, 'movie', 0)
+  } else {
+    console.log('No Camera!')
+  }
 })
 
-let camera, lastfile
-ipcMain.on('previewpath', (event, arg) => {
-  console.log('receive preview request ...')
-  if (lastfile) {
-    setTimeout(() => {
-      fs.unlink(lastfile)
-    }, 1000)
-  }
-  if (!camera) {
-    GPhoto.list(function (list) {
-      if (list.length === 0) {
-        console.log('no camera found!')
-        return
-      }
-      camera = list[0]
-      console.log('Found', camera.model)
-      camera.takePicture({
-        preview: true,
-        targetPath: '/tmp/foo.XXXXXX'
-      }, function (er, tmpname) {
-        lastfile = tmpname
-        event.returnValue = tmpname
-        console.log(tmpname)
-      })
-    })
-  } else {
-    camera.takePicture({
+ipcMain.on('startrecord', async (event, arg) => {
+  const cameras = await GP2.list()
+  if (cameras.length > 0) {
+    camera = cameras[0]
+    await GP2.setConfig(camera, 'movie', 1)
+    const path = await GP2.takePicture(camera, {
       preview: true,
       targetPath: '/tmp/foo.XXXXXX'
-    }, function (er, tmpname) {
-      event.returnValue = tmpname
-      console.log(tmpname)
     })
+    event.returnValue = path
+  } else {
+    console.log('No Camera!')
+  }
+})
+
+ipcMain.on('preview', async (event, arg) => {
+  if (camera) {
+    const path = await GP2.takePicture(camera, {
+      preview: true,
+      targetPath: '/tmp/foo.XXXXXX'
+    })
+    event.returnValue = path
+  } else {
+    console.log('No Camera!')
   }
 })
 
