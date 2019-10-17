@@ -10,7 +10,8 @@ let camera
 
 ipcMain.on('stoprecord', async (event, arg) => {
   if (camera) {
-    await GP2.setConfig(camera, 'movie', 0)
+    GP2.setConfig(camera, 'movie', 0)
+    console.log('done!')
   } else {
     console.log('No Camera!')
   }

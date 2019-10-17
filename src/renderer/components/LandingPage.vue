@@ -5,11 +5,14 @@
        <div :style="{left, top}" style="z-index:100;width:10px;height:10px;background-color:green;position:absolute;" />
        <b-img :id="`img_${idx}`" @drag="imgdraging($event, slide, idx)" @dragstart="imgdragstart($event, slide, idx)" @dragend="imgdragstop($event, slide)" v-for="(slide, idx) in sortedslider" :key="idx" :src="slide.img" :style="{width: `${slide.width}px`, height: `${slide.height}px`, left: `${slide.left}px`, bottom: `${slide.bottom}px`, zIndex: slide.zIndex || 0}" style="position:absolute;" />
     <div>
-      <b-button @click='startrecord' class='m-5'>开始录制</b-button>
-      <b-button @click='stoprecord' class='m-5'>停止录制</b-button>
-      <b-button @click='startcapture' class='m-5'>开始捕获</b-button>
-      <b-button @click='stopcapture' class='m-5'>停止捕获</b-button>
-      <b-button @click='savecapture' class='m-5'>导出视频</b-button>
+      <b-button v-if="!capture.capturing" @click='startrecord' class='m-5'>开始录制</b-button>
+      <span> {{ recordLen }} </span>
+      <b-button v-if="capture.capturing" @click='stoprecord' class='m-5'>停止录制</b-button>
+      <b-button v-if="!capture.capturing && capture.stopTick" @click='savecapture' class='m-5'>导出视频</b-button>
+    </div>
+
+    <div>
+      <b-button @click='clearZone' class='m-5'>清理视频区</b-button>
     </div>
 
     <span>{{position}}</span>
@@ -19,8 +22,9 @@
 </template>
 
 <script>
-const { ipcRenderer } = require('electron')
+// const { ipcRenderer } = require('electron')
 const { ImageLayer, CanvasLayer, Capture } = require('./capture')
+const moment = require('moment')
 
 export default {
   data: () => ({
@@ -29,6 +33,8 @@ export default {
     top: 0,
     activeSlide: null,
     maxZIndex: 0,
+    recordLen: '00:00:00',
+    capture: new Capture({ width: 1920, height: 1080 }),
     coverdisplay: 'inline',
     slides: [
       {img: '/static/images/img1.png', width: 1145, height: 809, left: 1940, bottom: 10, zIndex: 0},
@@ -53,7 +59,6 @@ export default {
     }
   },
   mounted () {
-    this.capture = new Capture({width: 1920, height: 1080})
     this.slides.forEach((slider, idx) => {
       const id = `img_${idx}`
       const elem = document.getElementById(id)
@@ -67,17 +72,26 @@ export default {
     this.context = this.canvas.getContext('2d')
     this.context.lineWidth = 5
     this.context.strokeStyle = '#ff0000'
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'c') {
-        console.log('clear')
-        this.coverdisplay = 'none'
-      } else if (e.key === 'd') {
-        this.coverdisplay = 'inline'
-        console.log('draw')
-      }
-    })
   },
   methods: {
+    updateRecordLen () {
+      const utc = moment.utc
+      if (!this.capture.startTick) this.recordLen = '00:00:00'
+      else if (!this.capture.capturing && this.capture.stopTick) this.recordLen = utc(this.capture.stopTick - this.capture.startTick).format('HH:mm:ss')
+      else this.recordLen = utc(new Date().getTime() - this.capture.startTick).format('HH:mm:ss')
+    },
+    clearZone () {
+      this.context.clearRect(0, 0, this.canvas.width, this.canvas.height)
+      this.slides.forEach((slider, idx) => {
+        if ((slider.left < 1920 && slider.bottom < 1080) || (slider.bottom > 1090)) {
+          slider.left = 100 * idx
+          slider.bottom = 1100
+          slider.zIndex = -1
+          slider.layer.setPos(slider.left - 10, -slider.height - 10)
+        }
+      })
+      this.canvasLayer.clear()
+    },
     startDraw (e) {
       this.lineStart = [e.offsetX, e.offsetY]
       this.context.beginPath()
@@ -119,13 +133,27 @@ export default {
     },
     startcapture () {
       this.capture.start()
+      this.timerid = setInterval(() => {
+        this.updateRecordLen()
+      }, 1000)
     },
     stopcapture () {
+      clearInterval(this.timerid)
       this.capture.stop()
     },
     savecapture () {
+      console.log('start save ...')
+      let lastsecs
       this.capture.save((frame, ext, buffer) => {
-        console.log(frame, ext)
+        if (Number.isInteger(frame)) {
+          const secs = Math.floor(frame / 30)
+          if (secs !== lastsecs) {
+            console.log(secs)
+            lastsecs = secs
+          }
+        } else {
+          console.log(frame, ext)
+        }
         const fs = require('fs')
         const path = `/Users/wesleywang/Desktop/dump/${frame}.${ext}`
         fs.writeFileSync(path, buffer)
@@ -133,20 +161,24 @@ export default {
       })
     },
     stoprecord () {
-      ipcRenderer.sendSync('stoprecord')
+      this.stopcapture()
       this.previewing = false
+      setTimeout(() => {
+        // ipcRenderer.send('stoprecord')
+      }, 1000)
     },
     startrecord () {
-      const canvas = document.getElementById('preview')
-      const context = canvas.getContext('2d')
-      const image = new Image()
+      // const canvas = document.getElementById('preview')
+      // const context = canvas.getContext('2d')
+      // const image = new Image()
       this.previewing = true
-      let imgpath = ipcRenderer.sendSync('startrecord')
-      image.onload = () => {
-        context.drawImage(image, 0, 0, canvas.width, canvas.height)
-        if (this.previewing) image.src = `file://${ipcRenderer.sendSync('preview')}`
-      }
-      image.src = `file://${imgpath}`
+      // let imgpath = ipcRenderer.sendSync('startrecord')
+      this.startcapture()
+      // image.onload = () => {
+      //   context.drawImage(image, 0, 0, canvas.width, canvas.height)
+      //   if (this.previewing) image.src = `file://${ipcRenderer.sendSync('preview')}`
+      // }
+      // image.src = `file://${imgpath}`
     }
   }
 }

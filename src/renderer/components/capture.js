@@ -1,3 +1,4 @@
+const Frame = require('canvas-to-buffer')
 class Layer {
   constructor (zindex, left, top, width, height) {
     this.zindex = zindex
@@ -101,10 +102,13 @@ export class Capture {
     this.width = opts.width || 1920
     this.height = opts.height || 1080
     this.layers = []
+    this.capturing = false
   }
   start () {
     this.startTick = new Date().getTime()
+    this.stopTick = null
     this.layers.forEach(layer => { layer.operations = [] })
+    this.capturing = true
   }
   addLayer (layer) {
     this.layers.push(layer)
@@ -112,8 +116,9 @@ export class Capture {
   }
   stop () {
     this.stopTick = new Date().getTime()
+    this.capturing = false
   }
-  save (savefunc) {
+  async save (savefunc) {
     const framemap = {}
     const frames = []
     for (let frame = 1; ; frame++) {
@@ -139,14 +144,13 @@ export class Capture {
         }
       })
 
-      const string = canvas.toDataURL()
-      const regex = /^data:.+\/(.+);base64,(.*)$/
-      const matches = string.match(regex)
-      const ext = matches[1]
-      const data = matches[2]
-      const buffer = Buffer.from(data, 'base64')
-
-      const path = savefunc(frame, ext, buffer)
+      const aframe = new Frame(canvas, {
+        image: {
+          types: ['png']
+        }
+      })
+      const buffer = aframe.toBuffer()
+      const path = savefunc(frame, 'png', buffer)
       frames.push({ frame, duration: 1, path })
       framemap[layerdeep] = frame
     }
