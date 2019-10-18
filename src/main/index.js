@@ -1,53 +1,6 @@
 'use strict'
 
 import { app, BrowserWindow, Menu } from 'electron'
-const { ipcMain } = require('electron')
-
-const GPhoto2 = require('./gphoto2').default
-
-let GP2 = new GPhoto2()
-let camera
-
-ipcMain.on('stoprecord', async (event, arg) => {
-  if (camera) {
-    GP2.setConfig(camera, 'movie', 0)
-    console.log('done!')
-  } else {
-    console.log('No Camera!')
-  }
-})
-
-ipcMain.on('startrecord', async (event, arg) => {
-  if (!camera) {
-    const cameras = await GP2.list()
-    if (cameras.length > 0) {
-      camera = cameras[0]
-    }  
-  }
-  if (camera) {
-    await GP2.setConfig(camera, 'movie', 1)
-    const path = await GP2.takePicture(camera, {
-      preview: true,
-      targetPath: '/tmp/foo.XXXXXX'
-    })
-    event.returnValue = path
-  } else {
-    console.log('No Camera!')
-    event.returnValue = null
-  }
-})
-
-ipcMain.on('preview', async (event, arg) => {
-  if (camera) {
-    const path = await GP2.takePicture(camera, {
-      preview: true,
-      targetPath: '/tmp/foo.XXXXXX'
-    })
-    event.returnValue = path
-  } else {
-    console.log('No Camera!')
-  }
-})
 
 /**
  * Set `__static` path to static files in production

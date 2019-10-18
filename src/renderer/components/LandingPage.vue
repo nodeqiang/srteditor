@@ -22,12 +22,62 @@
 </template>
 
 <script>
-const { ipcRenderer } = require('electron')
 const { dialog } = require('electron').remote
 const moment = require('moment')
+const fs = require('fs')
+const GPhoto2 = require('./gphoto2').default
+let GP2 = new GPhoto2()
+let camera
+
+const fileUsed = []
+function stoprecord () {
+  if (camera) {
+    GP2.setConfig(camera, 'movie', 0)
+    console.log('done!')
+  } else {
+    console.log('No Camera!')
+  }
+}
+
+async function startrecord () {
+  if (!camera) {
+    const cameras = await GP2.list()
+    if (cameras.length > 0) {
+      camera = cameras[0]
+    }
+  }
+  if (camera) {
+    await GP2.setConfig(camera, 'movie', 1)
+    const path = await GP2.takePicture(camera, {
+      preview: true,
+      targetPath: '/Volumes/Ramdisk/foo.XXXXXX'
+    })
+    fileUsed.push(path)
+    return path
+  } else {
+    console.log('No Camera!')
+  }
+}
+
+async function preview () {
+  if (camera) {
+    const path = await GP2.takePicture(camera, {
+      preview: true,
+      targetPath: '/Volumes/Ramdisk/foo.XXXXXX'
+    })
+    fileUsed.push(path)
+    if (fileUsed.length >= 2) {
+      const nousedfile = fileUsed.shift()
+      fs.unlink(nousedfile, () => {})
+    }
+    return path
+  } else {
+    console.log('No Camera!')
+  }
+}
 
 const { ImageLayer, CanvasLayer, Capture } = require('./capture')
-
+const ConnectToGphoto2 = true
 export default {
   data: () => ({
     position: '',
@@ -171,22 +221,27 @@ export default {
     stoprecord () {
       this.stopcapture()
       this.previewing = false
-      setTimeout(() => {
-        ipcRenderer.send('stoprecord')
-      }, 1000)
+      if (ConnectToGphoto2) {
+        stoprecord()
+      }
     },
-    startrecord () {
+    async startrecord () {
       const canvas = document.getElementById('preview')
       const context = canvas.getContext('2d')
       const image = new Image()
       this.previewing = true
-      let imgpath = ipcRenderer.sendSync('startrecord')
-      this.startcapture()
-      image.onload = () => {
-        context.drawImage(image, 0, 0, canvas.width, canvas.height)
-        if (this.previewing) image.src = `file://${ipcRenderer.sendSync('preview')}`
+      if (ConnectToGphoto2) {
+        let imgpath = await startrecord()
+        image.onload = async () => {
+          if (this.previewing) {
+            context.drawImage(image, 0, 0, canvas.width, canvas.height)
+            const tmppath = await preview()
+            image.src = `file://${tmppath}`
+          }
+        }
+        image.src = `file://${imgpath}`
       }
-      image.src = `file://${imgpath}`
+      this.startcapture()
     }
   }
 }

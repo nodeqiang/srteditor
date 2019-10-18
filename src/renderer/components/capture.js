@@ -10,11 +10,34 @@ class Layer {
     this.startTick = new Date().getTime()
     this.operations = []
   }
-  saveOperation (func) {
+  backToKeyFrame (tick) {
+    let min = 0
+    let max = this.operations.length - 1
+    let avg = Math.floor((min + max) / 2)
+    if (this.operations.length <= 0) return 0
+    while (!(this.operations[avg].tick <= tick && (avg + 1 >= this.operations.length || this.operations[avg + 1].tick > tick))) {
+      if (this.operations[avg].tick < tick) {
+        min = avg
+      } else {
+        max = avg
+      }
+      avg = Math.floor((min + max) / 2)
+      if ((avg === min) || (avg === max)) break
+    }
+    return avg
+  }
+  saveOperation (opt) {
     this.operations.push({
       tick: new Date().getTime(),
-      func
+      ...opt
     })
+  }
+  runOperation (opt) {
+    if (opt.type === 'clear') {
+      this.clear()
+    } else if (opt.type === 'zindex') {
+      this.zindex = opt.zindex
+    }
   }
   intersect (boundrect) {
     const nonIntersect = (this.left + this.width < boundrect.left) ||
@@ -24,25 +47,21 @@ class Layer {
     return !nonIntersect
   }
   setZIndex (zindex) {
-    this.saveOperation(() => {
-      this.zindex = zindex
-    })
+    this.saveOperation({type: 'zindex', zindex})
   }
   update (tick) {
-    this._reset()
+    const start = this.backToKeyFrame(tick)
     let i
-    for (i = 0; i < this.operations.length; i++) {
+    for (i = start; i < this.operations.length; i++) {
       const otick = this.operations[i].tick
       if (otick > tick) break
-      this.operations[i].func()
+      this.runOperation(this.operations[i])
     }
     return i
   }
   _reset () { }
   clear () {
-    this.saveOperation(() => {
-      this._reset()
-    })
+    this.saveOperation({type: 'clear'})
   }
   draw (context) {
     if (this.target) context.drawImage(this.target, this.left, this.top, this.width, this.height)
@@ -60,11 +79,14 @@ export class ImageLayer extends Layer {
       this.top = top
     }
   }
+  runOperation (opt) {
+    if (opt.type === 'pos') {
+      this.left = opt.left
+      this.top = opt.top
+    } else super.runOperation(opt)
+  }
   setPos (left, top) {
-    this.saveOperation(() => {
-      this.left = left
-      this.top = top
-    })
+    this.saveOperation({ type: 'pos', left, top })
   }
 }
 
@@ -78,20 +100,30 @@ export class CanvasLayer extends Layer {
     this.context.lineWidth = 5
     this.context.strokeStyle = '#ff0000'
   }
+  backToKeyFrame (tick) {
+    let start = super.backToKeyFrame(tick)
+    while (start > 0 && this.operations[start].type !== 'clear') {
+      start--
+    }
+    return start
+  }
   _reset () {
     this.context.clearRect(0, 0, this.target.width, this.target.height)
   }
-  move (to) {
-    this.saveOperation(() => {
+  runOperation (opt) {
+    if (opt.type === 'move') {
       this.context.beginPath()
-      this.context.moveTo(...to)
-    })
+      this.context.moveTo(...opt.to)
+    } else if (opt.type === 'line') {
+      this.context.lineTo(...opt.to)
+      this.context.stroke()
+    } else super.runOperation(opt)
+  }
+  move (to) {
+    this.saveOperation({ type: 'move', to })
   }
   line (to) {
-    this.saveOperation(() => {
-      this.context.lineTo(...to)
-      this.context.stroke()
-    })
+    this.saveOperation({ type: 'line', to })
   }
 }
 
