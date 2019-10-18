@@ -230,12 +230,35 @@ export default {
       const context = canvas.getContext('2d')
       const image = new Image()
       this.previewing = true
+      let startat = new Date().getTime()
+      let lastsecs
+      let reloadcheck
       if (ConnectToGphoto2) {
         let imgpath = await startrecord()
         image.onload = async () => {
+          if (reloadcheck) {
+            clearTimeout(reloadcheck)
+            reloadcheck = null
+          }
+          const delta = new Date().getTime() - startat
+          const secs = moment.utc(delta).format('HH:mm:ss')
+          if (secs !== lastsecs) {
+            console.log(secs, 'image onload ...')
+          }
           if (this.previewing) {
-            context.drawImage(image, 0, 0, canvas.width, canvas.height)
+            try {
+              context.drawImage(image, 0, 0, canvas.width, canvas.height)
+            } catch (ex) {
+            }
             const tmppath = await preview()
+            if (secs !== lastsecs) {
+              console.log(secs, 'change src to', tmppath)
+              lastsecs = secs
+            }
+            reloadcheck = setTimeout(() => {
+              reloadcheck = null
+              image.onload()
+            }, 1000)
             image.src = `file://${tmppath}`
           }
         }
