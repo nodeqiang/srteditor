@@ -18,9 +18,13 @@ ipcMain.on('stoprecord', async (event, arg) => {
 })
 
 ipcMain.on('startrecord', async (event, arg) => {
-  const cameras = await GP2.list()
-  if (cameras.length > 0) {
-    camera = cameras[0]
+  if (!camera) {
+    const cameras = await GP2.list()
+    if (cameras.length > 0) {
+      camera = cameras[0]
+    }  
+  }
+  if (camera) {
     await GP2.setConfig(camera, 'movie', 1)
     const path = await GP2.takePicture(camera, {
       preview: true,
@@ -29,6 +33,7 @@ ipcMain.on('startrecord', async (event, arg) => {
     event.returnValue = path
   } else {
     console.log('No Camera!')
+    event.returnValue = null
   }
 })
 

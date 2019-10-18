@@ -119,6 +119,7 @@ export class Capture {
     this.capturing = false
   }
   async save (savefunc) {
+    if (!this.stopTick) return console.log('not start or not stop yet!')
     const framemap = {}
     const frames = []
     for (let frame = 1; ; frame++) {

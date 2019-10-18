@@ -8,7 +8,7 @@
       <b-button v-if="!capture.capturing" @click='startrecord' class='m-5'>开始录制</b-button>
       <span> {{ recordLen }} </span>
       <b-button v-if="capture.capturing" @click='stoprecord' class='m-5'>停止录制</b-button>
-      <b-button v-if="!capture.capturing && capture.stopTick" @click='savecapture' class='m-5'>导出视频</b-button>
+      <b-button @click='savecapture' class='m-5'>导出视频</b-button>
     </div>
 
     <div>
@@ -22,9 +22,11 @@
 </template>
 
 <script>
-// const { ipcRenderer } = require('electron')
-const { ImageLayer, CanvasLayer, Capture } = require('./capture')
+const { ipcRenderer } = require('electron')
+const { dialog } = require('electron').remote
 const moment = require('moment')
+
+const { ImageLayer, CanvasLayer, Capture } = require('./capture')
 
 export default {
   data: () => ({
@@ -141,8 +143,14 @@ export default {
       clearInterval(this.timerid)
       this.capture.stop()
     },
-    savecapture () {
-      console.log('start save ...')
+    async savecapture () {
+      const cpath = await dialog.showOpenDialog({
+        properties: ['openDirectory', 'createDirectory']
+      })
+      console.log(cpath)
+      if (!cpath || cpath.length === 0) return
+      const basepath = cpath[0]
+      console.log('start save ...', basepath)
       let lastsecs
       this.capture.save((frame, ext, buffer) => {
         if (Number.isInteger(frame)) {
@@ -155,7 +163,7 @@ export default {
           console.log(frame, ext)
         }
         const fs = require('fs')
-        const path = `/Users/wesleywang/Desktop/dump/${frame}.${ext}`
+        const path = `${basepath}/${frame}.${ext}`
         fs.writeFileSync(path, buffer)
         return path
       })
@@ -164,21 +172,21 @@ export default {
       this.stopcapture()
       this.previewing = false
       setTimeout(() => {
-        // ipcRenderer.send('stoprecord')
+        ipcRenderer.send('stoprecord')
       }, 1000)
     },
     startrecord () {
-      // const canvas = document.getElementById('preview')
-      // const context = canvas.getContext('2d')
-      // const image = new Image()
+      const canvas = document.getElementById('preview')
+      const context = canvas.getContext('2d')
+      const image = new Image()
       this.previewing = true
-      // let imgpath = ipcRenderer.sendSync('startrecord')
+      let imgpath = ipcRenderer.sendSync('startrecord')
       this.startcapture()
-      // image.onload = () => {
-      //   context.drawImage(image, 0, 0, canvas.width, canvas.height)
-      //   if (this.previewing) image.src = `file://${ipcRenderer.sendSync('preview')}`
-      // }
-      // image.src = `file://${imgpath}`
+      image.onload = () => {
+        context.drawImage(image, 0, 0, canvas.width, canvas.height)
+        if (this.previewing) image.src = `file://${ipcRenderer.sendSync('preview')}`
+      }
+      image.src = `file://${imgpath}`
     }
   }
 }
