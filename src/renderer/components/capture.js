@@ -1,6 +1,7 @@
 const Frame = require('canvas-to-buffer')
 class Layer {
-  constructor (zindex, left, top, width, height) {
+  constructor (name, zindex, left, top, width, height) {
+    this.name = name
     this.zindex = zindex
     this.target = null
     this.left = left
@@ -34,7 +35,7 @@ class Layer {
   }
   runOperation (opt) {
     if (opt.type === 'clear') {
-      this.clear()
+      this._reset()
     } else if (opt.type === 'zindex') {
       this.zindex = opt.zindex
     }
@@ -69,8 +70,8 @@ class Layer {
 }
 
 export class ImageLayer extends Layer {
-  constructor (zindex, url, left, top, width, height) {
-    super(zindex, left, top, width, height)
+  constructor (name, zindex, url, left, top, width, height) {
+    super(name, zindex, left, top, width, height)
     this.url = url
     this.target = new Image()
     this.target.src = url
@@ -78,6 +79,13 @@ export class ImageLayer extends Layer {
       this.left = left
       this.top = top
     }
+  }
+  backToKeyFrame (tick) {
+    let start = super.backToKeyFrame(tick)
+    while (start > 0 && this.operations[start].type !== 'pos') {
+      start--
+    }
+    return start
   }
   runOperation (opt) {
     if (opt.type === 'pos') {
@@ -91,8 +99,8 @@ export class ImageLayer extends Layer {
 }
 
 export class CanvasLayer extends Layer {
-  constructor (zindex, left, top, width, height) {
-    super(zindex, left, top, width, height)
+  constructor (name, zindex, left, top, width, height) {
+    super(name, zindex, left, top, width, height)
     this.target = document.createElement('canvas')
     this.target.width = width
     this.target.height = height
@@ -139,6 +147,7 @@ export class Capture {
   start () {
     this.startTick = new Date().getTime()
     this.stopTick = null
+    this.exportTick = null
     this.layers.forEach(layer => { layer.operations = [] })
     this.capturing = true
   }
@@ -150,8 +159,16 @@ export class Capture {
     this.stopTick = new Date().getTime()
     this.capturing = false
   }
+  async sleep (ms) {
+    return new Promise(resolve => {
+      setTimeout(() => {
+        resolve()
+      }, ms)
+    })
+  }
   async save (savefunc) {
     if (!this.stopTick) return console.log('not start or not stop yet!')
+    this.exportTick = new Date().getTime()
     const framemap = {}
     const frames = []
     for (let frame = 1; ; frame++) {
@@ -183,7 +200,7 @@ export class Capture {
         }
       })
       const buffer = aframe.toBuffer()
-      const path = savefunc(frame, 'png', buffer)
+      const path = await savefunc(frame, 'png', buffer)
       frames.push({ frame, duration: 1, path })
       framemap[layerdeep] = frame
     }

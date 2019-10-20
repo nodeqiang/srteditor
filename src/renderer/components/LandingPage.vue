@@ -2,11 +2,11 @@
   <div id='app'
        style='width:100vwheight:100vh'
        class='d-flex flex-column align-items-center justify-content-center'>
-       <div :style="{left, top}" style="z-index:100;width:10px;height:10px;background-color:green;position:absolute;" />
+       <!-- <div :style="{left, top}" style="z-index:100;width:10px;height:10px;background-color:green;position:absolute;" /> -->
        <b-img :id="`img_${idx}`" @drag="imgdraging($event, slide, idx)" @dragstart="imgdragstart($event, slide, idx)" @dragend="imgdragstop($event, slide)" v-for="(slide, idx) in sortedslider" :key="idx" :src="slide.img" :style="{width: `${slide.width}px`, height: `${slide.height}px`, left: `${slide.left}px`, bottom: `${slide.bottom}px`, zIndex: slide.zIndex || 0}" style="position:absolute;" />
     <div>
+      <span style="position:absolute;left:10px;top:10px;font-size:50px;color:red;"> {{ recordLen }} </span>
       <b-button v-if="!capture.capturing" @click='startrecord' class='m-5'>开始录制</b-button>
-      <span> {{ recordLen }} </span>
       <b-button v-if="capture.capturing" @click='stoprecord' class='m-5'>停止录制</b-button>
       <b-button @click='savecapture' class='m-5'>导出视频</b-button>
     </div>
@@ -77,7 +77,7 @@ async function preview () {
 }
 
 const { ImageLayer, CanvasLayer, Capture } = require('./capture')
-const ConnectToGphoto2 = true
+const ConnectToGphoto2 = false
 export default {
   data: () => ({
     position: '',
@@ -117,9 +117,9 @@ export default {
       const target = document.getElementById('preview')
       const left = elem.offsetLeft - target.offsetLeft
       const top = elem.offsetTop - target.offsetTop
-      slider.layer = this.capture.addLayer(new ImageLayer(0, slider.img, left, top, slider.width, slider.height))
+      slider.layer = this.capture.addLayer(new ImageLayer(`image_${idx}`, 0, slider.img, left, top, slider.width, slider.height))
     })
-    this.canvasLayer = this.capture.addLayer(new CanvasLayer(10000, 0, 0, 1920, 1080))
+    this.canvasLayer = this.capture.addLayer(new CanvasLayer('canvas', 10000, 0, 0, 1920, 1080))
     this.canvas = document.getElementById('cover')
     this.context = this.canvas.getContext('2d')
     this.context.lineWidth = 5
@@ -202,12 +202,13 @@ export default {
       const basepath = cpath[0]
       console.log('start save ...', basepath)
       let lastsecs
-      this.capture.save((frame, ext, buffer) => {
+      this.capture.save(async (frame, ext, buffer) => {
         if (Number.isInteger(frame)) {
           const secs = Math.floor(frame / 30)
           if (secs !== lastsecs) {
             console.log(secs)
             lastsecs = secs
+            await this.capture.sleep(10) // so we got console output
           }
         } else {
           console.log(frame, ext)
@@ -226,6 +227,13 @@ export default {
       }
     },
     async startrecord () {
+      if (this.capture.startTick && !this.capture.exportTick) {
+        dialog.showMessageBox({
+          title: '提示',
+          message: '请先保存录制的内容'
+        })
+        return
+      }
       const canvas = document.getElementById('preview')
       const context = canvas.getContext('2d')
       const image = new Image()
