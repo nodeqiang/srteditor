@@ -77,7 +77,7 @@ async function preview () {
 }
 
 const { ImageLayer, CanvasLayer, Capture } = require('./capture')
-const ConnectToGphoto2 = false
+const ConnectToGphoto2 = true
 export default {
   data: () => ({
     position: '',
