@@ -223,8 +223,8 @@ export class Capture {
 <!DOCTYPE fcpxml>
 <fcpxml version="1.8">
     <resources>
-        <format id="r1" name="FFVideoFormat1080p30" frameDuration="100/3000s" width="1280" height="720" colorSpace="1-1-1 (Rec. 709)"/>
-        <format id="r4" name="FFVideoFormatRateUndefined" width="1280" height="720"/>
+        <format id="r1" name="FFVideoFormat1080p30" frameDuration="100/3000s" width="1920" height="1080" colorSpace="1-1-1 (Rec. 709)"/>
+        <format id="r4" name="FFVideoFormatRateUndefined" width="1920" height="1080"/>
         <effect id="r2" name="自定" uid=".../Generators.localized/Solids.localized/Custom.localized/Custom.motn"/>
         ${assets}
     </resources>
