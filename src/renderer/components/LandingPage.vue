@@ -6,7 +6,8 @@
        <b-img :id="`img_${idx}`" @drag="imgdraging($event, slide, idx)" @dragstart="imgdragstart($event, slide, idx)" @dragend="imgdragstop($event, slide)" v-for="(slide, idx) in sortedslider" :key="idx" :src="slide.img" :style="{width: `${slide.width}px`, height: `${slide.height}px`, left: `${slide.left}px`, bottom: `${slide.bottom}px`, zIndex: slide.zIndex || 0}" style="position:absolute;" />
     <div>
       <span style="position:absolute;left:10px;top:10px;font-size:50px;color:red;"> {{ recordLen }} </span>
-      <b-button v-if="!capture.capturing" @click='startrecord' class='m-5'>开始录制</b-button>
+      <b-button @click='loadconf' class='m-5'>打开配置文件</b-button>
+      <b-button v-if="!capture.capturing && loadPath" @click='startrecord' class='m-5'>开始录制</b-button>
       <b-button v-if="capture.capturing" @click='stoprecord' class='m-5'>停止录制</b-button>
       <b-button @click='savecapture' class='m-5'>导出视频</b-button>
     </div>
@@ -77,7 +78,7 @@ async function preview () {
 }
 
 const { ImageLayer, CanvasLayer, Capture } = require('./capture')
-const ConnectToGphoto2 = true
+const ConnectToGphoto2 = false
 export default {
   data: () => ({
     position: '',
@@ -88,22 +89,8 @@ export default {
     recordLen: '00:00:00',
     capture: new Capture({ width: 1920, height: 1080 }),
     coverdisplay: 'inline',
-    slides: [
-      {img: '/static/images/img1.png', width: 1145, height: 809, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img3.png', width: 1136, height: 515, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img2.png', width: 1140, height: 601, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img4.png', width: 1144, height: 692, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img5.png', width: 1131, height: 759, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img6.png', width: 1136, height: 771, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img7.png', width: 1133, height: 1005, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img8.png', width: 1132, height: 980, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img9.png', width: 1127, height: 979, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img10.png', width: 1135, height: 988, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img11.png', width: 1133, height: 1006, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img12.png', width: 1143, height: 990, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img13.png', width: 1135, height: 976, left: 1940, bottom: 10, zIndex: 0},
-      {img: '/static/images/img14.png', width: 1133, height: 1010, left: 1940, bottom: 10, zIndex: 0}
-    ]
+    loadPath: null,
+    slides: []
   }),
   computed: {
     sortedslider () {
@@ -111,21 +98,44 @@ export default {
     }
   },
   mounted () {
-    this.slides.forEach((slider, idx) => {
-      const id = `img_${idx}`
-      const elem = document.getElementById(id)
-      const target = document.getElementById('preview')
-      const left = elem.offsetLeft - target.offsetLeft
-      const top = elem.offsetTop - target.offsetTop
-      slider.layer = this.capture.addLayer(new ImageLayer(`image_${idx}`, 0, slider.img, left, top, slider.width, slider.height))
-    })
-    this.canvasLayer = this.capture.addLayer(new CanvasLayer('canvas', 10000, 0, 0, 1920, 1080))
     this.canvas = document.getElementById('cover')
     this.context = this.canvas.getContext('2d')
     this.context.lineWidth = 5
     this.context.strokeStyle = '#ff0000'
   },
+  watch: {
+    loadPath () {
+      const json5 = require('json5')
+      this.conf = json5.parse(require('fs').readFileSync(this.loadPath).toString('utf-8'))
+      this.slides = this.conf.slides
+      this.capture = new Capture({ name: this.conf.name, width: 1920, height: 1080 })
+      this.capture.basedir = require('path').dirname(this.loadPath)
+    },
+    capture () {
+      setTimeout(() => {
+        this.slides.forEach((slider, idx) => {
+          const id = `img_${idx}`
+          const elem = document.getElementById(id)
+          const target = document.getElementById('preview')
+          const left = elem.offsetLeft - target.offsetLeft
+          const top = elem.offsetTop - target.offsetTop
+          slider.layer = this.capture.addLayer(new ImageLayer(`image_${idx}`, 0, slider.img, left, top, slider.width, slider.height))
+        })
+        this.canvasLayer = this.capture.addLayer(new CanvasLayer('canvas', 10000, 0, 0, 1920, 1080))
+      }, 300)
+    }
+  },
   methods: {
+    async loadconf () {
+      const cpath = await dialog.showOpenDialog({
+        filters: [
+          { name: '配置文件', extensions: ['json5'] }
+        ]
+      })
+      console.log(cpath)
+      if (!cpath) return
+      this.loadPath = cpath[0]
+    },
     updateRecordLen () {
       const utc = moment.utc
       if (!this.capture.startTick) this.recordLen = '00:00:00'
@@ -194,30 +204,16 @@ export default {
       this.capture.stop()
     },
     async savecapture () {
-      const cpath = await dialog.showOpenDialog({
-        properties: ['openDirectory', 'createDirectory']
-      })
-      console.log(cpath)
-      if (!cpath || cpath.length === 0) return
-      const basepath = cpath[0]
-      console.log('start save ...', basepath)
-      let lastsecs
-      this.capture.save(async (frame, ext, buffer) => {
-        if (Number.isInteger(frame)) {
-          const secs = Math.floor(frame / 30)
-          if (secs !== lastsecs) {
-            console.log(secs)
-            lastsecs = secs
-            await this.capture.sleep(10) // so we got console output
-          }
-        } else {
-          console.log(frame, ext)
-        }
-        const fs = require('fs')
-        const path = `${basepath}/${frame}.${ext}`
-        fs.writeFileSync(path, buffer)
-        return path
-      })
+      // const cpath = await dialog.showOpenDialog({
+      //   properties: ['openDirectory', 'createDirectory']
+      // })
+      // console.log(cpath)
+      // if (!cpath || cpath.length === 0) return
+      // const basepath = cpath[0]
+      console.log('start save ...')
+      this.capture.save()
+      // let lastsecs
+      // this.capture.save()
     },
     stoprecord () {
       this.stopcapture()

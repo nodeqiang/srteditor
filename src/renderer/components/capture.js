@@ -142,13 +142,27 @@ export class Capture {
     this.width = opts.width || 1920
     this.height = opts.height || 1080
     this.layers = []
+    this.projname = opts.name
     this.capturing = false
+    this.partidx = 0
+  }
+  set basedir (base) {
+    this._basedir = base
+    this.renderpath = require('path').join(base, 'render')
+    this.fcpxmlpath = require('path').join(base, 'fcpxml')
+    try {
+      require('fs').mkdirSync(this.renderpath)
+    } catch (e) {}
+    try {
+      require('fs').mkdirSync(this.fcpxmlpath)
+    } catch (e) {}
   }
   start () {
+    this.partidx++
     this.startTick = new Date().getTime()
     this.stopTick = null
     this.exportTick = null
-    this.layers.forEach(layer => { layer.operations = [] })
+    this.layers.forEach(layer => { layer.operations = []; layer.clear() })
     this.capturing = true
   }
   addLayer (layer) {
@@ -166,12 +180,32 @@ export class Capture {
       }, ms)
     })
   }
-  async save (savefunc) {
+
+  async writeframe (frame, ext, buffer) {
+    if (Number.isInteger(frame)) {
+      const secs = Math.floor(frame / 30)
+      if (secs !== this.lastsecs) {
+        console.log(secs)
+        this.lastsecs = secs
+        await this.sleep(10) // so we got console output
+      }
+    } else {
+      console.log(frame, ext)
+    }
+    const fs = require('fs')
+    const path = `${this.framepath}/${this.projname}_${this.partidx}_${frame}.${ext}`
+    fs.writeFileSync(path, buffer)
+    return path
+  }
+
+  async save () {
+    this.framepath = require('path').join(this.renderpath, 'part' + this.partidx)
+    try { require('fs').mkdirSync(this.framepath) } catch (e) {}
     if (!this.stopTick) return console.log('not start or not stop yet!')
     this.exportTick = new Date().getTime()
     const framemap = {}
     const frames = []
-    for (let frame = 1; ; frame++) {
+    for (let frame = 0; ; frame++) {
       const tick = this.startTick + 1000 * frame / this.framerate
       if (tick > this.stopTick) {
         break
@@ -200,21 +234,23 @@ export class Capture {
         }
       })
       const buffer = aframe.toBuffer()
-      const path = await savefunc(frame, 'png', buffer)
+      const path = await this.writeframe(frame, 'png', buffer)
       frames.push({ frame, duration: 1, path })
       framemap[layerdeep] = frame
     }
-    this.exportfcp(savefunc, frames)
+    this.exportfcp(frames)
   }
-  exportfcp (savefunc, frames) {
+  async exportfcp (frames) {
+    this.framepath = this.fcpxmlpath
     const uuid = require('uuid')
     const moment = require('moment')
+    const projname = this.projname
     const assets = frames.map(frame => {
-      return `<asset id="r${100 + frame.frame}" name="${frame.frame}" uid="${uuid.v4()}" src="file://${frame.path}" start="0s" duration="0s" hasVideo="1" format="r4" />`
+      return `<asset id="${projname}_${this.partidx}_${100 + frame.frame}" name="${projname}_${this.partidx}_${frame.frame}" uid="${uuid.v4()}" src="file://${frame.path}" start="0s" duration="0s" hasVideo="1" format="r4" />`
     }).join('\n')
     let curroffset = 0
     const videos = frames.map(frame => {
-      const result = `<video name="${frame.frame}" lane="1" offset="${curroffset * 100}/3000s" ref="r${100 + frame.frame}" duration="${frame.duration * 100}/3000s" start="0s"/>`
+      const result = `<video name="${projname}_${this.partidx}_${frame.frame}" lane="1" offset="${curroffset * 100}/3000s" ref="${projname}_${this.partidx}_${100 + frame.frame}" duration="${frame.duration * 100}/3000s" start="0s"/>`
       curroffset += frame.duration
       return result
     }).join('\n')
@@ -230,7 +266,7 @@ export class Capture {
     </resources>
     <library location="file:///Users/wesleywang/Movies/%E9%BB%98%E8%AE%A4.fcpbundle/">
         <event name="日常" uid="6ABE2EA9-BBC0-4D9C-A187-9CBDB547B8F0">
-            <project name="CaptureJS生成" uid="${uuid.v4()}" modDate="${moment().format('YYYY-MM-DD HH:mm:ss')} +0800">
+            <project name="${projname} Part ${this.partidx}" uid="${uuid.v4()}" modDate="${moment().format('YYYY-MM-DD HH:mm:ss')} +0800">
                 <sequence duration="${totalframe * 100}/3000s" format="r1" tcStart="0s" tcFormat="NDF" audioLayout="stereo" audioRate="48k">
                     <spine>
                         <video name="自定" offset="0s" ref="r2" duration="${totalframe * 100}/3000s" start="0s">
@@ -243,7 +279,6 @@ export class Capture {
     </library>
 </fcpxml>
 `
-    savefunc('video', 'fcpxml', Buffer.from(result, 'utf-8'))
-    // console.log(frames)
+    await this.writeframe('video_' + this.partidx, 'fcpxml', Buffer.from(result, 'utf-8'))
   }
 }
