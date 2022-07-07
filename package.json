@@ -63,7 +63,7 @@
     "ccapture.js": "aceslowman/ccapture.js#npm-fix",
     "gphoto2": "^0.3.0",
     "json5": "^2.1.1",
-    "moment": "^2.24.0",
+    "moment": "^2.29.4",
     "uuid": "^3.3.3",
     "vue": "^2.5.16",
     "vue-electron": "^1.0.6",
